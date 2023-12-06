@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
+    'accounts',
 ]
 
 MIDDLEWARE = [
@@ -95,6 +96,9 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+# 커스텀 유저 모델 {app_name}.{model_name}
+AUTH_USER_MODEL = 'accounts.User' 
 
 
 # Password validation
