@@ -5,8 +5,8 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from django.shortcuts import get_object_or_404
-from boards.models import PostModel
-from .serializers import PostModelSerializer
+from boards.models import PostModel, CommentModel
+from .serializers import PostModelSerializer, CommentModelSerializer
 from .permissions import IsOwnerOrReadOnly
 
 
@@ -118,3 +118,67 @@ class PostAPIView(APIView):
         
         else:
             return Response(status= status.HTTP_400_BAD_REQUEST)
+        
+
+# comment API (댓글 API)
+class CommentAPIView(APIView):
+    permission_classes = [IsOwnerOrReadOnly]
+    authentication_classes = [JWTAuthentication]
+
+
+    def get(self, request, pk):
+        queryset = get_object_or_404(CommentModel, id= pk)
+        serializer = CommentModelSerializer(instance= queryset)
+
+        return Response(serializer.data, status= status.HTTP_200_OK)
+
+
+    # POST 메소드는 해당 게시글(post)의 pk를 request로 받아서
+    # 게시글에 댓글을 저장시 CommentModel에서 PostModel을 참조하고 있는
+    # board 필드를 지정해서 저장하게 끔 구현
+    def post(self, request, pk):
+        try:
+            new_data = {**request.data, 'board': pk, 'owner': request.user.pk}
+            serializer = CommentModelSerializer(data= new_data)
+            serializer.is_valid(raise_exception= True)
+            serializer.save()
+
+            return Response(serializer.data, status= status.HTTP_201_CREATED)
+        except Exception as e:
+            print(e)
+            return Response(status= status.HTTP_400_BAD_REQUEST)
+
+
+    # PATCH 메소드는 댓글의 PK 를 받는다.
+    def patch(self, request, pk):
+        queryset = get_object_or_404(CommentModel, id= pk)
+        # object의 접근 권한 확인
+        self.check_object_permissions(request= request, obj= queryset)
+
+        serializer = CommentModelSerializer(instance= queryset, data= request.data, partial= True)
+        serializer.is_valid(raise_exception= True)
+        serializer.save()
+
+        return Response(serializer.data, status= status.HTTP_200_OK)
+
+
+    def put(self, request, pk):
+        queryset = get_object_or_404(CommentModel, id= pk)
+        # object의 접근 권한 확인
+        self.check_object_permissions(request= request, obj= queryset)
+
+        serializer = CommentModelSerializer(instance= queryset, data= request.data)
+        serializer.is_valid(raise_exception= True)
+        serializer.save()
+
+        return Response(serializer.data, status= status.HTTP_200_OK)
+
+
+    def delete(self, request, pk):
+        queryset = get_object_or_404(CommentModel, id= pk)
+        # object의 접근 권한 확인
+        self.check_object_permissions(request= request, obj= queryset)
+        queryset.delete()
+
+        return Response(status= status.HTTP_204_NO_CONTENT)
+
