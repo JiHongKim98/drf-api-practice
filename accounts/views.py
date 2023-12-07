@@ -1,12 +1,12 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.authentication import SessionAuthentication
 
-from rest_framework_simplejwt.tokens import TokenError
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
+from rest_framework_simplejwt.tokens import TokenError, RefreshToken
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer, TokenBlacklistSerializer
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from django.contrib.auth import authenticate
@@ -53,7 +53,19 @@ class UserAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         # User 객체 수정사항 저장 (serializer의 update 메소드 호출)
         serializer.save()
+
+        # 회원정보 수정시 다시 로그인 하도록 유도
         response = Response(serializer.data, status= status.HTTP_200_OK)
+        response.delete_cookie("refresh")
+        response.delete_cookie("access")
+
+        # refresh token 미보유시 예외처리
+        try:
+            refresh_token = request.COOKIES["refresh"]
+            RefreshToken(refresh_token).blacklist()
+            
+        except Exception as e:
+            pass
 
         return response
     
@@ -67,7 +79,19 @@ class UserAPIView(APIView):
         serializer.is_valid(raise_exception= True)
         # User 객체 수정사항 저장 (serializer의 update 메소드 호출)
         serializer.save()
+        
+        # 회원정보 수정시 다시 로그인 하도록 유도
         response = Response(serializer.data, status= status.HTTP_200_OK)
+        response.delete_cookie("refresh")
+        response.delete_cookie("access")
+
+        # refresh token 미보유시 예외처리
+        try:
+            refresh_token = request.COOKIES["refresh"]
+            RefreshToken(refresh_token).blacklist()
+            
+        except Exception as e:
+            pass
 
         return response
 
@@ -76,7 +100,19 @@ class UserAPIView(APIView):
         queryset = User.objects.get(username= request.user.username)
         # User 객체 삭제 (serializer의 delete 메소드 호출)
         queryset.delete()
+
+        # 회원 탈퇴시 refresh token을 blacklist로 이동 시키기
         response = Response(status= status.HTTP_204_NO_CONTENT)
+        response.delete_cookie("refresh")
+        response.delete_cookie("access")
+
+        # refresh token 미보유시 예외처리
+        try:
+            refresh_token = request.COOKIES["refresh"]
+            RefreshToken(refresh_token).blacklist()
+            
+        except Exception as e:
+            pass
 
         return response
     
@@ -153,3 +189,27 @@ class CustomTokenRefreshView(APIView):
             response = Response(status= status.HTTP_401_UNAUTHORIZED)
 
         return response
+    
+
+
+@permission_classes([IsAuthenticated])
+@authentication_classes([JWTAuthentication])
+@api_view(['POST'])
+def logout(request):
+    serializer = TokenBlacklistSerializer(data={"refresh" : str(request.COOKIES["refresh"])})
+    
+    try:
+        serializer.is_valid(raise_exception= True)
+        response = Response(status= status.HTTP_204_NO_CONTENT)
+
+    except TokenError as e:
+        data = {"detail": str(e)}
+        response = Response(data= data, status= status.HTTP_400_BAD_REQUEST)
+    
+    # TokenError 가 발생하던 하지 않던 일단 로그아웃시
+    # refresh 토큰과 access 토큰은 무조건 삭제
+    response.delete_cookie("refresh")
+    response.delete_cookie("access")
+
+    return response
+
