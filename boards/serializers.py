@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from boards.models import PostModel
+from boards.models import PostModel, CommentModel
 
 
 class PostModelSerializer(serializers.ModelSerializer):
@@ -38,3 +38,24 @@ class PostModelSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
     
+
+class CommentModelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CommentModel
+        fields = '__all__'
+    
+    # 필드의 표현 방식 변환 id => username
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['owner'] = instance.owner.username
+        return representation
+    
+    def update(self, instance, validated_data):
+        # patch 를 위해 key값이 있는 필드별로 업데이트
+        for key, value in validated_data.items():
+            # key 값이 onwer 또는 board 일 경우 무시
+            if key != 'owner' and key != 'board':
+                setattr(instance, key, value)
+
+        instance.save()
+        return instance
