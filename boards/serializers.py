@@ -4,6 +4,14 @@ from boards.models import PostModel, CommentModel
 
 
 class PostModelSerializer(serializers.ModelSerializer):
+    # BoardModel 에 정의하지 않은 새로운 필드 (해당 게시글의 댓글 수)
+    comment_num = serializers.SerializerMethodField()
+
+    # get_{fields 이름}
+    def get_comment_num(self, obj):
+        comment_num= obj.post_comment.count() # related_name 으로 역참조
+        return comment_num
+
     # 만약 SerializerMethodField 를 통해 외래키(FK) 필드인 owner의 표현을
     # id(PK값) => username 으로 바꾸려고 한다면, SerializerMethodField 가
     # 기본적으로 read only로 설계 되어있어 'NOT NULL constraint failed'

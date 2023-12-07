@@ -40,8 +40,14 @@ class PostAPIView(APIView):
             # 해당 PK를 가진 "게시글" 데이터과 "댓글" 목록을 가져옴
             queryset = get_object_or_404(PostModel, id= pk)
             serializer = PostModelSerializer(instance= queryset)
+            comment_queryset = queryset.post_comment.all() # related_name 으로 역참조
+            comment_serializer = CommentModelSerializer(instance= comment_queryset, many= True)
 
-            return Response(serializer.data, status= status.HTTP_200_OK)
+            data = {
+                "board": serializer.data,
+                "comment": comment_serializer.data
+            }
+            return Response(data, status= status.HTTP_200_OK)
 
         return Response(serializer.data, status= status.HTTP_200_OK)
     
