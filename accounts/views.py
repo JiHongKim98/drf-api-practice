@@ -28,93 +28,60 @@ class UserAPIView(APIView):
     def get(self, request):
         queryset = User.objects.get(username= request.user.username)
         serializer = UserSerializer(instance= queryset)
-
         return Response(serializer.data, status= status.HTTP_200_OK)
 
 
     # 회원가입
     def post(self, request):
         serializer = UserSerializer(data= request.data)
-
-        # 유효성 검사
-        serializer.is_valid(raise_exception= True)
-        # User 객체 저장 (serializer의 create 메소드 호출)
-        serializer.save()
-
+        self.valid_and_save(serializer) # 유효성 검사후 저장
         return Response(serializer.data, status= status.HTTP_201_CREATED)
 
 
     # 회원정보 수정 (일부)
     def patch(self, request):
-        queryset = User.objects.get(username= request.user.username)
-        serializer = UserSerializer(instance= queryset, data= request.data, partial= True)
-
-        # 유효성 검사
-        serializer.is_valid(raise_exception=True)
-        # User 객체 수정사항 저장 (serializer의 update 메소드 호출)
-        serializer.save()
-
-        # 회원정보 수정시 다시 로그인 하도록 유도
-        response = Response(serializer.data, status= status.HTTP_200_OK)
-        response.delete_cookie("refresh")
-        response.delete_cookie("access")
-
-        # refresh token 미보유시 예외처리
-        try:
-            refresh_token = request.COOKIES["refresh"]
-            RefreshToken(refresh_token).blacklist()
-            
-        except Exception as e:
-            pass
-
-        return response
+        self.partial_update(request, partial= True)
     
 
     # 회원정보 수정 (전체)
     def put(self, request):
-        queryset = User.objects.get(username= request.user.username)
-        serializer = UserSerializer(instance= queryset, data= request.data)
-
-        # 유효성 검사
-        serializer.is_valid(raise_exception= True)
-        # User 객체 수정사항 저장 (serializer의 update 메소드 호출)
-        serializer.save()
-        
-        # 회원정보 수정시 다시 로그인 하도록 유도
-        response = Response(serializer.data, status= status.HTTP_200_OK)
-        response.delete_cookie("refresh")
-        response.delete_cookie("access")
-
-        # refresh token 미보유시 예외처리
-        try:
-            refresh_token = request.COOKIES["refresh"]
-            RefreshToken(refresh_token).blacklist()
-            
-        except Exception as e:
-            pass
-
-        return response
+        self.partial_update(request, partial= False)
 
     
     def delete(self, request):
         queryset = User.objects.get(username= request.user.username)
-        # User 객체 삭제 (serializer의 delete 메소드 호출)
-        queryset.delete()
+        queryset.delete() # User 객체 삭제
+        return self.handle_response(request)
+    
+    
+    # 유효성 검사후 save (중복 코드 개선)
+    def valid_and_save(self, serializer):
+        serializer.is_valid(raise_exception= True)
+        serializer.save()
 
-        # 회원 탈퇴시 refresh token을 blacklist로 이동 시키기
-        response = Response(status= status.HTTP_204_NO_CONTENT)
+    # JWT 토큰 삭제 후 재로그인 유도 응답 (중복 코드 개선)
+    def handle_response(self, request, serializer=None):
+        # update시 데이터와 함께 200 코드 반환, delete시 204 코드만 반환
+        response = Response(serializer.data ,status= status.HTTP_200_OK) if serializer else Response(status= status.HTTP_204_NO_CONTENT)
+        # JWT 토큰을 삭제해 다시 로그인 하도록 유도
         response.delete_cookie("refresh")
         response.delete_cookie("access")
 
-        # refresh token 미보유시 예외처리
+        # refresh token 미보유 예외처리
         try:
             refresh_token = request.COOKIES["refresh"]
-            RefreshToken(refresh_token).blacklist()
+            RefreshToken(refresh_token).blacklist() # 보유한 refresh 토큰을 blacklist
             
-        except Exception as e:
-            pass
+        except Exception as e: pass
 
         return response
+
+    # PUT 과 PATCH 에서의 중복된 코드를 하나로 통일 (중복 코드 개선)
+    def partial_update(self, request, partial=True):
+        queryset = User.objects.get(username= request.user.username)
+        serializer = UserSerializer(instance= queryset, data= request.data, partial= partial)
+        self.valid_and_save(serializer) # 유효성 검사후 저장
+        return self.handle_response(request, serializer)
     
 
 # FBV (Function-Base-Views) 함수 기반 뷰
@@ -152,7 +119,6 @@ def login(request):
 
         # 최근 로그인 기록 업데이트
         update_last_login(None, user)
-
         return response
     
     else:
@@ -166,8 +132,8 @@ class CustomTokenRefreshView(APIView):
     # Refresh 는 post 메소드만
     def post(self, request):
         try:
-            data = {"refresh": request.COOKIES["refresh"]}
-            print(data)
+            refresh_token = request.COOKIES["refresh"]
+            data = {"refresh": refresh_token}
             serializer = TokenRefreshSerializer(data= data)
             serializer.is_valid(raise_exception= True)
 
@@ -178,14 +144,9 @@ class CustomTokenRefreshView(APIView):
             # TokenRefreshSerializer 에서 refresh token 도 반환해줌.
             response.set_cookie("refresh", serializer.data["refresh"])
         
-        # request의 COOKIE 에 refresh token 정보가 없을 때 예외처리
-        except KeyError as e:
-            print(e)
-            response = Response(status= status.HTTP_401_UNAUTHORIZED)
-
-        # 만료되었거나 완전히 이상한 refresh token 예외처리
-        except TokenError as e:
-            print(e)
+        # refresh 토큰이 없거나 토큰이 유효하지 않을 경우 예외
+        except (KeyError, TokenError) as e:
+            print(f"refresh 토큰 오류 : {e}")
             response = Response(status= status.HTTP_401_UNAUTHORIZED)
 
         return response
@@ -196,9 +157,9 @@ class CustomTokenRefreshView(APIView):
 @authentication_classes([JWTAuthentication])
 @api_view(['POST'])
 def logout(request):
-    serializer = TokenBlacklistSerializer(data={"refresh" : str(request.COOKIES["refresh"])})
-    
     try:
+        refresh_token = str(request.COOKIES["refresh"])
+        serializer = TokenBlacklistSerializer(data={"refresh": refresh_token})
         serializer.is_valid(raise_exception= True)
         response = Response(status= status.HTTP_204_NO_CONTENT)
 
@@ -206,8 +167,7 @@ def logout(request):
         data = {"detail": str(e)}
         response = Response(data= data, status= status.HTTP_400_BAD_REQUEST)
     
-    # TokenError 가 발생하던 하지 않던 일단 로그아웃시
-    # refresh 토큰과 access 토큰은 무조건 삭제
+    # refresh 토큰과 access 토큰 삭제
     response.delete_cookie("refresh")
     response.delete_cookie("access")
 
