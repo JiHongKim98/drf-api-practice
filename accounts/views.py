@@ -40,12 +40,12 @@ class UserAPIView(APIView):
 
     # 회원정보 수정 (일부)
     def patch(self, request):
-        self.partial_update(request, partial= True)
+        return self.partial_update(request, partial= True)
     
 
     # 회원정보 수정 (전체)
     def put(self, request):
-        self.partial_update(request, partial= False)
+        return self.partial_update(request, partial= False)
 
     
     def delete(self, request):
