@@ -31,20 +31,10 @@ class PostModelSerializer(serializers.ModelSerializer):
         # PostModel 의 모든 필드를 사용
         fields = '__all__'
 
-        # owner 필드를 읽기전용으로 설정하면 Create 시에도 문제.
-        # 오류 => 'NOT NULL constraint failed'
-        # 따라서 Update 메소드를 커스텀하여 owner 필드는 무시하도록 구현해야 한다!
-        # read_only_fields = ('owner',)
-    
     def update(self, instance, validated_data):
-        # patch 를 위해 key값이 있는 필드별로 업데이트
-        for key, value in validated_data.items():
-            # key 값이 onwer 일 경우 무시
-            if key != 'owner':
-                setattr(instance, key, value)
-
-        instance.save()
-        return instance
+        # 업데이트시 owner 필드 제외
+        validated_data.pop('owner', None)
+        return super().update(instance, validated_data)
     
 
 class CommentModelSerializer(serializers.ModelSerializer):
@@ -59,11 +49,7 @@ class CommentModelSerializer(serializers.ModelSerializer):
         return representation
     
     def update(self, instance, validated_data):
-        # patch 를 위해 key값이 있는 필드별로 업데이트
-        for key, value in validated_data.items():
-            # key 값이 onwer 또는 board 일 경우 무시
-            if key != 'owner' and key != 'board':
-                setattr(instance, key, value)
-
-        instance.save()
-        return instance
+        # 업데이트시 owner, board 필드 제외
+        validated_data.pop('owner', None)
+        validated_data.pop('board', None)
+        return super().update(instance, validated_data)
