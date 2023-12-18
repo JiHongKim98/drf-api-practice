@@ -253,7 +253,8 @@ class CommentModifyTestCase(APITestCase, JWTSetupMixin):
 
         before_updated_date = self.user_comment.updated_date
         data = {
-            "contents": "modify-comment"
+            "contents": "modify-comment",
+            "board": self.user_post.pk
         }
 
         # client 에 refresh, access 토큰 설정 (JWTSetupMixin)
@@ -305,7 +306,8 @@ class CommentModifyTestCase(APITestCase, JWTSetupMixin):
         response = self.client.put(
             path= f'{BASE_API_URL}/comments/{self.user_comment.pk}',
             data= {
-            "contents": "modify-comment"
+            "contents": "modify-comment",
+            "board": self.user_post.pk
             },
             format= 'json'
         )
@@ -343,7 +345,8 @@ class CommentModifyTestCase(APITestCase, JWTSetupMixin):
         response = self.client.put(
             path= f'{BASE_API_URL}/comments/{dummy_users_comment.pk}',
             data= {
-            "contents": "modify-comment"
+            "contents": "modify-comment",
+            "board": self.user_post.pk
             },
             format= 'json'
         )
@@ -353,6 +356,46 @@ class CommentModifyTestCase(APITestCase, JWTSetupMixin):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(response_error_code, 'permission_denied')
+
+    def test_modify_comment_foreign_key_info(self):
+        """
+        case: 댓글의 FK 정보인 owner, board 필드를 수정하려는 경우
+
+        1. 200 Ok 응답.
+        2. owner, board 필드는 변경되지 않음.
+        3. updated_date 갱신.
+        """
+
+        dummy_user = User.objects.create_user(
+            username= "dummy",
+            password= "dummy-pw",
+            email= "dummy@gmail.com",
+            fullname= "dummy"
+        )
+
+        dummy_user_post = PostModel.objects.create(
+            title= "dummy-title",
+            contents= "dummy-contents",
+            owner= dummy_user
+        )
+
+        before_updated_date = self.user_post.updated_date
+
+        # client 에 refresh, access 토큰 설정 (JWTSetupMixin)
+        self.api_authentication(self.client, self.user)
+
+        response = self.client.patch(
+            path= f'{BASE_API_URL}/comments/{self.user_post.pk}',
+            data= {
+                "owner": dummy_user.pk,
+                "board": dummy_user_post.pk
+            },
+            format= 'json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotEqual(response.data['owner'], dummy_user.username)
+        self.assertNotEqual(response.data['board'], dummy_user_post.pk)
+        self.assertNotEqual(before_updated_date, response.data['updated_date'])
 
 
 # Comments delte test case (DELETE)
