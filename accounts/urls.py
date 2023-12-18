@@ -3,7 +3,7 @@ from . import views
 
 urlpatterns = [
     path("users", views.UserAPIView.as_view()),
-    path("login", views.login),
-    path("logout", views.logout),
+    path("login", views.LoginAPIView.as_view()),
+    path("logout", views.LogoutAPIView.as_view()),
     path("refresh", views.CustomTokenRefreshView.as_view()),
 ]
