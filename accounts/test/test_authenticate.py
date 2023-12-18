@@ -28,18 +28,9 @@ class UserLoginTestCase(APITestCase):
         case: 정상적으로 로그인 하는 경우
 
         1. 200 OK 응답.
-        2. 인증된 사용자의 password 정보는 보내지 않음.
-        3. refresh, access 토큰이 쿠키에 포함.
-        4. refresh, access 토큰 HttpOnly 옵션.
+        2. refresh, access 토큰이 쿠키에 포함.
+        3. refresh, access 토큰 HttpOnly 옵션.
         """
-
-        user_info = {
-            "id": 1,
-            "username": "kimjihong",
-            "password": "password",
-            "email": "kinjihong9598@gmail.com",
-            "fullname": "kimjihong"
-        }
 
         response = self.client.post(
             path= f'{BASE_API_URL}/login',
@@ -48,11 +39,7 @@ class UserLoginTestCase(APITestCase):
                 "password": "password"
             }
         )
-
-        user_info.pop('password')
-
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertDictEqual(response.data["user"], user_info)
         self.assertIsNotNone(self.client.cookies.get('refresh', None))
         self.assertIsNotNone(self.client.cookies.get('access', None))
         self.assertIn('httponly', str(self.client.cookies.get('refresh', None)).lower())
@@ -62,7 +49,8 @@ class UserLoginTestCase(APITestCase):
         """
         case: 존재하지 않는 username 으로 로그인 시도한 경우
 
-        1. 400 Bad Request 응답.
+        1. 401 Unauthorized 응답.
+        2. detail 필드에 오류 메시지를 포함하여 반환.
         """
 
         response = self.client.post(
@@ -72,28 +60,48 @@ class UserLoginTestCase(APITestCase):
                 "password": "password"
             }
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_authentication_without_password(self):
+        # response 의 ErrorDetail code
+        response_error_code = response.data['detail'].code
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response_error_code, 'no_active_account')
+
+    def test_authentication_missing_required_fields(self):
         """
-        case: password 를 입력하지 않고 로그인 시도한 경우
+        case: 필수 작성 fields(username, password) 가 빠진 경우
 
         1. 400 Bad Request 응답.
+        2. detail 에 해당 필드 오류 메시지 포함.
         """
 
-        response = self.client.post(
-            path= f'{BASE_API_URL}/login',
-            data= {
-                "username": "kimjihong"
-            }
-        )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        # 필수 fields 정의
+        required_fields = ['username', 'password']
+
+        data = {
+            "username": "kimjihong",
+            "password": "password"
+        }
+
+        for pop_field in required_fields:
+            data.pop(pop_field)
+            response = self.client.post(
+                path= f'{BASE_API_URL}/login',
+                data= data
+            )
+
+            # response 의 ErrorDetail code
+            response_error_code = response.data[pop_field][0].code
+
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertEqual(response_error_code, 'required')
 
     def test_authentication_with_wrong_password(self):
         """
         case: username 이 존재하지만, password 가 틀린 경우
 
-        1. 400 Bad Request 응답.
+        1. 401 Unauthorized 응답.
+        2. detail 필드에 오류 메시지를 포함하여 반환.
         """
 
         response = self.client.post(
@@ -103,7 +111,12 @@ class UserLoginTestCase(APITestCase):
                 "password": "wrong-password"
             }
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # response 의 ErrorDetail code
+        response_error_code = response.data['detail'].code
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response_error_code, 'no_active_account')
 
 
 # Logout & Refresh (JWT-blacklist) API test case
@@ -121,7 +134,7 @@ class TokenBlacklistTestCase(APITestCase, JWTSetupMixin):
         """
         case: 정상적으로 로그아웃이 진행된 경우
         
-        1. 204 No Content 응답.
+        1. 200 Ok 응답.
         2. refresh 토큰은 blacklist 에 등록.
         3. cookie 에 저장된 refresh, access 토큰 정보 삭제. 
         """
@@ -139,10 +152,28 @@ class TokenBlacklistTestCase(APITestCase, JWTSetupMixin):
 
         cookies = self.client.cookies
 
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(BlacklistedToken.objects.filter(token_id= refresh_id).exists())
         self.assertNotIn(refresh_token, cookies.get('refresh', None))
         self.assertNotIn(access_token, cookies.get('access', None))
+
+    def test_user_logout_with_unauthorized(self):
+        """
+        case: 인증되지 않은 사용자가 로그아웃 요청을 보낸 경우
+
+        1. 401 Unauthorized 응답.
+        2. detail 필드에 오류 메시지를 포함하여 반환.
+        """
+
+        response = self.client.post(
+            path= f'{BASE_API_URL}/logout'
+        )
+
+        # response 의 ErrorDetail code
+        response_error_code = response.data['detail'].code
+        
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response_error_code, 'not_authenticated')
 
     def test_token_refresh_rotate(self):
         """
