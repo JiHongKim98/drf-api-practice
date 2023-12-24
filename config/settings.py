@@ -50,13 +50,35 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
-    'django_apscheduler', # 장고 스케쥴러
+
+    'django_celery_beat',
+    'django_celery_results',
+
     'accounts',
     'boards',
 ]
+# celery setting
+CELERY_BROKER_URL = 'amqp://localhost'
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_TASK_TRACK_STARTED = True
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+# celery scheduler
+from celery.schedules import crontab
+CELERY_BEAT_SCHEDULE = {
+    'clean_expiry_token': {
+        'task': 'accounts.tasks.clean_expiry_token',
+        'schedule': crontab(minute='0', hour='*'), # 매시간 정각 주기로 실행
+        'args': (),
+    },
+}
+
 
 MIDDLEWARE = [
     'accounts.custom_middleware.JWTAuthenticationMiddleware', # JWT 를 헤더에 포함하는 미들웨어
