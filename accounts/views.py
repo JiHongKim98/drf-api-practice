@@ -1,4 +1,5 @@
 from rest_framework import status, generics
+from rest_framework.views import APIView
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -8,8 +9,15 @@ from rest_framework_simplejwt.tokens import TokenError, RefreshToken
 from rest_framework_simplejwt.exceptions import InvalidToken
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from .serializers import UserSerializer
-from .permissions import IsPostOrIsAuthenticated
+from django.http import Http404
+from django.utils.http import urlsafe_base64_decode
+from django.utils.encoding import force_str
+from django.shortcuts import get_object_or_404
+from django.contrib.auth.tokens import default_token_generator
+
+from accounts.models import User
+from accounts.serializers import UserSerializer
+from accounts.permissions import IsPostOrIsAuthenticated
 
 
 # User 설정 관련 API
@@ -40,6 +48,29 @@ class UserAPIView(generics.RetrieveUpdateDestroyAPIView,
         except Exception as e:
             pass
         return response
+
+
+# Email 인증을 위한 End-Point
+class EmailVerificationView(APIView):
+    def get(self, request, uidb64, token):
+        try:
+            user = self.get_user(uidb64)
+            self.verify_token(user, token)
+            return Response({"detail": f"{user.username}님의 이메일 인증이 완료되었습니다."}, status=status.HTTP_200_OK)
+
+        except (ValueError, Http404):
+            return Response({"detail": "잘못된 URL 입니다."}, status=status.HTTP_400_BAD_REQUEST)
+
+    def get_user(self, uidb64):
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        return get_object_or_404(User, pk=uid)
+
+    # Token 검증
+    def verify_token(self, user, token):
+        if not default_token_generator.check_token(user, token):
+            raise Http404()
+        user.is_active = True
+        user.save()
 
 
 class LoginAPIView(TokenObtainPairView):

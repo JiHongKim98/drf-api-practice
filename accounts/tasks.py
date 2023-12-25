@@ -4,6 +4,7 @@ from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, Ou
 
 from django.db import transaction
 from django.utils import timezone
+from django.core.mail import EmailMessage
 
 
 # 만료된 JWT를 작제하는 TASK
@@ -24,4 +25,19 @@ def clean_expiry_token():
                 pass
 
             Outstand_instance.delete()
+
+
+# 이메일 인증을 위해서 사용자 생성시 작성한 이메일로 인증 메일 발송
+@shared_task
+def send_verification_mail(username, email, verification_url):
+    message = f"""이메일 인증을 완료하려면 아래의 링크를 클릭하세요.\n
+    URL : {verification_url}
+    """
+
+    email = EmailMessage(
+        subject= f"{username}님의 이메일 인증 링크입니다.",
+        body= message,
+        to= [email]
+    )
+    email.send()
 

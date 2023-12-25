@@ -173,15 +173,6 @@ REST_FRAMEWORK = {
     #'DEFAULT_RENDERER_CLASSES': (
     #    'rest_framework.renderers.JSONRenderer',
     #),
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticated',
-    ),
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.BasicAuthentication',
-        'rest_framework.authentication.SessionAuthentication', # 세션 인증
-        'rest_framework.authentication.TokenAuthentication', # 토큰 인증
-        'rest_framework_simplejwt.authentication.JWTAuthentication', # JWT 인증
-    ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10, # 최대 10개씩 보여준다.
 }
@@ -223,3 +214,13 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
+
+
+# SMTP - email 인증
+EMAIL_HOST = 'smtp.gmail.com'                           # 호스트 서버
+EMAIL_PORT = '587'                                      # 서버 포트
+EMAIL_HOST_USER = 'hong.server.email@gmail.com'         # Gmail
+EMAIL_HOST_PASSWORD = secrets['EMAIL_HOST_PASSWORD']    # Gmail PW
+EMAIL_USE_TLS = True                                    # TLS 보안 설정
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER                    # 응답 메일 관련
+

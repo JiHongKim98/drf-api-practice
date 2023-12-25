@@ -6,4 +6,5 @@ urlpatterns = [
     path("login", views.LoginAPIView.as_view()),
     path("logout", views.LogoutAPIView.as_view()),
     path("refresh", views.CustomTokenRefreshView.as_view()),
+    path("activate/<str:uidb64>/<str:token>", views.EmailVerificationView.as_view()),
 ]
