@@ -8,9 +8,44 @@ from accounts.models import User
 
 # client에 access, refresh 토큰 설정이 중복되어 Mixin 클래스로 모듈화함
 from accounts.test.common import JWTSetupMixin
+from unittest.mock import patch, ANY
 
 
 BASE_API_URL = '/api/v1/accounts'
+
+# Email verification test
+class EmailVerificationTestCase(APITestCase):
+    @patch('accounts.tasks.send_verification_mail.delay') # 테스트시에는 모의 이메일 전송
+    def setUp(self, mock_send_verification_mail):
+        self.client.post(
+            path= f'{BASE_API_URL}/users',
+            data= {
+                "username": "kimjihong",
+                "password": "password",
+                "email": "kinjihong9598@gmail.com",
+                "fullname": "kimjihong"
+            }
+        )
+
+        self.verification_url = mock_send_verification_mail.call_args[0][2]
+    
+    def test_email_verification(self):
+        """
+        case: 회원가입 후 유효한 email 인증 링크로 요청한 경우
+
+        1. 200 OK 응답.
+        2. 인증 이후에는 아이디가 활성화된 상태여야함.
+        """
+
+        response = self.client.get(
+            path= self.verification_url
+        )
+
+        user = User.objects.get(id= 1)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(user.is_active)
+
 
 # CREATE test case
 class UserRegistrationTestCase(APITestCase):
@@ -20,7 +55,8 @@ class UserRegistrationTestCase(APITestCase):
             username= "dummy",
             password= "dummy-pw",
             email= "dummy@gmail.com",
-            fullname= "dummy"
+            fullname= "dummy",
+            is_active= True
         )
 
     def setUp(self):
@@ -39,12 +75,15 @@ class UserRegistrationTestCase(APITestCase):
             "fullname": "kimjihong"
         }
 
-    def test_registration_success(self):
+    @patch('accounts.tasks.send_verification_mail.delay') # 테스트시에는 모의 이메일 전송
+    def test_registration_and_send_email_verification(self, mock_send_verification_mail):
         """
         case: 정상적으로 새로운 user 가 생성된 경우
 
         1. 201 Created 응답.
         2. 생성된 사용자의 password 정보는 보내지 않음.
+        3. Email 인증 전에는 사용자가 비활성 상태여야함.
+        4. 생성된 사용자의 Email로 인증 메일을 보내야함.
         """
         
         response = self.client.post(
@@ -52,10 +91,17 @@ class UserRegistrationTestCase(APITestCase):
             data= self.new_user
         )
         
+        new_user = User.objects.get(id= 2)
         self.new_user_info.pop('password')
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertDictEqual(response.data, self.new_user_info)
+        self.assertFalse(new_user.is_active)
+
+        # 인증 메일 전송 확인(실제로는 보내지 않음.)
+        mock_send_verification_mail.assert_called_once_with(
+            self.new_user['username'], self.new_user['email'], ANY
+        )
 
     def test_registration_unique_username_validate(self):
         """
@@ -114,7 +160,8 @@ class UserDetailTestCase(APITestCase, JWTSetupMixin):
             username= "kimjihong",
             password= "password",
             email= "kinjihong9598@gmail.com",
-            fullname= "kimjihong"
+            fullname= "kimjihong",
+            is_active= True
         )
 
     def setUp(self):
@@ -175,7 +222,8 @@ class UserModifyTestCase(APITestCase, JWTSetupMixin):
             username= "kimjihong",
             password= "password",
             email= "kinjihong9598@gmail.com",
-            fullname= "kimjihong"
+            fullname= "kimjihong",
+            is_active= True
         )
 
     def setUp(self):
@@ -320,7 +368,8 @@ class UserDeleteTestCase(APITestCase, JWTSetupMixin):
             username= "kimjihong",
             password= "password",
             email= "kinjihong9598@gmail.com",
-            fullname= "kimjihong"
+            fullname= "kimjihong",
+            is_active= True
         )
         
     def test_delete_user_success(self):

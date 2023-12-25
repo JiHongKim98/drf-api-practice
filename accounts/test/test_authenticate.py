@@ -20,7 +20,8 @@ class UserLoginTestCase(APITestCase):
             username= "kimjihong",
             password= "password",
             email= "kinjihong9598@gmail.com",
-            fullname= "kimjihong"
+            fullname= "kimjihong",
+            is_active= True
         )
 
     def test_authentication_with_valid_data(self):
@@ -127,7 +128,8 @@ class TokenBlacklistTestCase(APITestCase, JWTSetupMixin):
             username= "kimjihong",
             password= "password",
             email= "kinjihong9598@gmail.com",
-            fullname= "kimjihong"
+            fullname= "kimjihong",
+            is_active= True
         )
 
     def test_user_logout_and_blacklisted_token(self):
