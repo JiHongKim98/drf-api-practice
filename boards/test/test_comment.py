@@ -18,7 +18,8 @@ class CommentCreateTestCase(APITestCase, JWTSetupMixin):
             username= "kimjihong",
             password= "password",
             email= "kinjihong9598@gmail.com",
-            fullname= "kimjihong"
+            fullname= "kimjihong",
+            is_active= True
         )
 
         cls.user_post = PostModel.objects.create(
@@ -173,7 +174,8 @@ class CommentRetrieveTestCase(APITestCase):
             username= "kimjihong",
             password= "password",
             email= "kinjihong9598@gmail.com",
-            fullname= "kimjihong"
+            fullname= "kimjihong",
+            is_active= True
         )
 
         cls.user_post = PostModel.objects.create(
@@ -227,7 +229,8 @@ class CommentModifyTestCase(APITestCase, JWTSetupMixin):
             username= "kimjihong",
             password= "password",
             email= "kinjihong9598@gmail.com",
-            fullname= "kimjihong"
+            fullname= "kimjihong",
+            is_active= True
         )
 
         cls.user_post = PostModel.objects.create(
@@ -406,7 +409,8 @@ class CommentDeleteTestCase(APITestCase, JWTSetupMixin):
             username= "kimjihong",
             password= "password",
             email= "kinjihong9598@gmail.com",
-            fullname= "kimjihong"
+            fullname= "kimjihong",
+            is_active= True
         )
 
         cls.user_post = PostModel.objects.create(
