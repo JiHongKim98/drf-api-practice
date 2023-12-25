@@ -18,7 +18,8 @@ class PostCreateTestCase(APITestCase, JWTSetupMixin):
             username= "kimjihong",
             password= "password",
             email= "kinjihong9598@gmail.com",
-            fullname= "kimjihong"
+            fullname= "kimjihong",
+            is_active= True
         )
 
     def test_create_post_success(self):
@@ -143,7 +144,8 @@ class PostListPaginationTestCase(APITestCase):
             username= "kimjihong",
             password= "password",
             email= "kinjihong9598@gmail.com",
-            fullname= "kimjihong"
+            fullname= "kimjihong",
+            is_active= True
         )
 
         # 50 dummy posts
@@ -226,7 +228,8 @@ class PostRetrieveTestCase(APITestCase):
             username= "kimjihong",
             password= "password",
             email= "kinjihong9598@gmail.com",
-            fullname= "kimjihong"
+            fullname= "kimjihong",
+            is_active= True
         )
 
         cls.user_post = PostModel.objects.create(
@@ -290,7 +293,8 @@ class PostModifyTestCase(APITestCase, JWTSetupMixin):
             username= "kimjihong",
             password= "password",
             email= "kinjihong9598@gmail.com",
-            fullname= "kimjihong"
+            fullname= "kimjihong",
+            is_active= True
         )
 
         cls.user_post = PostModel.objects.create(
@@ -458,7 +462,8 @@ class PostDeleteTestCase(APITestCase, JWTSetupMixin):
             username= "kimjihong",
             password= "password",
             email= "kinjihong9598@gmail.com",
-            fullname= "kimjihong"
+            fullname= "kimjihong",
+            is_active= True
         )
 
         cls.user_post = PostModel.objects.create(
