@@ -1,4 +1,8 @@
-from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.contrib.auth.models import (
+    AbstractBaseUser,
+    BaseUserManager,
+    PermissionsMixin
+)
 from django.db import models
 
 
@@ -15,28 +19,20 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         extra_fields.setdefault('is_active', True)
-
         return self.create_user(username, email, fullname, password, **extra_fields)
 
 
 class User(AbstractBaseUser, PermissionsMixin):
     username = models.CharField(max_length= 20, unique= True, db_index= True) # index 생성
-    fullname = models.CharField(max_length= 10)
-    email = models.EmailField(verbose_name= 'email', max_length= 100,  null= False)
-
-    # Email 인증 완료시 is_active = True
-    is_active = models.BooleanField(default= False)
+    fullname = models.CharField(max_length= 10, null= False)
+    email = models.EmailField(verbose_name= 'email', max_length= 100, null= False)
+    is_active = models.BooleanField(default= False) # Email 인증 완료시 is_active = True
     is_staff = models.BooleanField(default=False)
 
-    objects = UserManager()
-
     USERNAME_FIELD = 'username'
-    
-    EMAIL_FIELD = 'email'
-
-    # 필수 입력 항목 추가
-    # blank=False, null=False 옵션으로 해도 된다.
     REQUIRED_FIELDS = ['email', 'fullname']
+
+    objects = UserManager()
 
     def __str__(self):
         return self.username

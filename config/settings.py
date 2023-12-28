@@ -81,7 +81,6 @@ CELERY_BEAT_SCHEDULE = {
 
 
 MIDDLEWARE = [
-    'accounts.custom_middleware.JWTAuthenticationMiddleware', # JWT 를 헤더에 포함하는 미들웨어
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',

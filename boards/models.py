@@ -4,8 +4,7 @@ from accounts.models import User
 
 # 게시판 모델
 class PostModel(models.Model):
-    # FK (User 모델과의 관계 설정)
-    owner = models.ForeignKey(User, on_delete= models.CASCADE, related_name= "post_owner")
+    owner = models.ForeignKey(User, on_delete= models.CASCADE, related_name= "post")
 
     title = models.CharField(max_length=255)
     contents = models.TextField()
@@ -16,15 +15,13 @@ class PostModel(models.Model):
         return self.title
     
     class Meta:
-        # 역순으로 정렬
         ordering = ['-id']
 
 
 # 댓글 모델
 class CommentModel(models.Model):
-    # FK (User 모델, Board 모델과의 관계 설정)
-    owner = models.ForeignKey(User, on_delete= models.CASCADE, related_name= "comment_owner")
-    board = models.ForeignKey(PostModel, on_delete= models.CASCADE, related_name= "post_comment")
+    owner = models.ForeignKey(User, on_delete= models.CASCADE, related_name= "comment")
+    post = models.ForeignKey(PostModel, on_delete= models.CASCADE, related_name= "comment")
 
     contents = models.TextField(null= False)
     created_date = models.DateTimeField("작성일", auto_now_add=True, null=False)
@@ -35,3 +32,4 @@ class CommentModel(models.Model):
     
     class Meta:
         ordering = ['-id']
+

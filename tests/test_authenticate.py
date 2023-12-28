@@ -4,10 +4,9 @@ from rest_framework.test import APITestCase
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
 from http.cookies import SimpleCookie
-from accounts.models import User
 
-# client에 access, refresh 토큰 설정이 중복되어 Mixin 클래스로 모듈화함
-from accounts.test.common import JWTSetupMixin
+from accounts.models import User
+from tests.utils import JWTSetupMixin
 
 
 BASE_API_URL = '/api/v1/accounts'
@@ -62,7 +61,6 @@ class UserLoginTestCase(APITestCase):
             }
         )
 
-        # response 의 ErrorDetail code
         response_error_code = response.data['detail'].code
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
@@ -76,8 +74,7 @@ class UserLoginTestCase(APITestCase):
         2. detail 에 해당 필드 오류 메시지 포함.
         """
 
-        # 필수 fields 정의
-        required_fields = ['username', 'password']
+        required_fields = ['username', 'password'] # 필수 fields
 
         data = {
             "username": "kimjihong",
@@ -91,7 +88,6 @@ class UserLoginTestCase(APITestCase):
                 data= data
             )
 
-            # response 의 ErrorDetail code
             response_error_code = response.data[pop_field][0].code
 
             self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -113,7 +109,6 @@ class UserLoginTestCase(APITestCase):
             }
         )
 
-        # response 의 ErrorDetail code
         response_error_code = response.data['detail'].code
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
@@ -171,7 +166,6 @@ class TokenBlacklistTestCase(APITestCase, JWTSetupMixin):
             path= f'{BASE_API_URL}/logout'
         )
 
-        # response 의 ErrorDetail code
         response_error_code = response.data['detail'].code
         
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
