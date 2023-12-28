@@ -3,9 +3,7 @@ from rest_framework.test import APITestCase
 
 from accounts.models import User
 from boards.models import CommentModel, PostModel
-
-# client에 access, refresh 토큰 설정이 중복되어 Mixin 클래스로 모듈화함
-from boards.test.common import JWTSetupMixin
+from tests.utils import JWTSetupMixin
 
 
 BASE_API_URL = '/api/v1/boards'
@@ -28,8 +26,7 @@ class PostCreateTestCase(APITestCase, JWTSetupMixin):
         
         1. 201 Created 응답.
         2. owner 는 요청을 보낸 사용자로 자동 생성 (반환값은 pk가 아닌 username).
-        3. created_date와 updated_date 정보 자동 생성.
-        4. response 데이터에 해당 게시글에 달린 댓글의 수 (comment_num) 정보를 포함.
+        3. response 데이터에 해당 게시글의 달린 댓글의 정보 comments 필드도 포함되어야함.
         """
 
         # client 에 refresh, access 토큰 설정 (JWTSetupMixin)
@@ -45,9 +42,7 @@ class PostCreateTestCase(APITestCase, JWTSetupMixin):
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data['owner'], self.user.username)
-        self.assertIn('created_date', response.data)
-        self.assertIn('updated_date', response.data)
-        self.assertIn('comment_num', response.data)
+        self.assertIn('comments', response.data)
 
     def test_create_post_with_changed_owner_field(self):
         """
@@ -96,7 +91,6 @@ class PostCreateTestCase(APITestCase, JWTSetupMixin):
             format= 'json'
         )
 
-        # response 의 ErrorDetail code
         response_error_code = response.data['detail'].code
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
@@ -129,7 +123,6 @@ class PostCreateTestCase(APITestCase, JWTSetupMixin):
                 format= 'json'
             )
 
-            # response 의 ErrorDetail code
             response_error_code = response.data[pop_field][0].code
 
             self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -156,18 +149,13 @@ class PostListPaginationTestCase(APITestCase):
                 owner= user
             )
 
-        # PAGE_SIZE 정보 추출
-        from django.conf import settings
-        cls.page_size = getattr(settings, 'REST_FRAMEWORK', {}).get('PAGE_SIZE', 10)
-
-    def test_post_pagination_without_query(self):
+    def test_post_list_success(self):
         """
-        case: 쿼리문에 페이지 없이 게시글들의 정보 요청할 경우
+        case: 게시글들의 정보 요청할 경우
 
         1. 200 Ok 응답.
-        2. page_size 설정 수만큼의 게시글 list 정보 전송.
-        3. 역순(최신순)으로 게시글 정렬.
-        4. 이전 페이지(previous)와 다음 페이지(next) End-Point를 포함하여 반환.
+        2. 최근 게시글 10개의 정보만 반환.
+        3. 다음 페이지의 커서 파라미터를 next에 포함.
         """
 
         response = self.client.get(
@@ -177,47 +165,25 @@ class PostListPaginationTestCase(APITestCase):
         posts_list = response.data['results']
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(posts_list), self.page_size)
-        self.assertEqual(posts_list[0]['id'], 50)
-        self.assertEqual(None, response.data['previous']) # 이전 페이지는 None(null)
-        self.assertIn('?page=2', response.data['next'])
+        self.assertEqual(len(posts_list), 10)
+        self.assertIn('?cursor', response.data['next'])
 
-    def test_post_pagination_with_query(self):
+    def test_post_pagination_with_invalid_cursor(self):
         """
-        case: 쿼리문에 페이지를 포함하여 게시글들의 정보 요청할 경우
-
-        1. 200 Ok 응답.
-        2. 해당 페이지의 게시글들의 정보 전송(역순 정렬).
-        3. 역순(최신순)으로 게시글 정렬.
-        4. 이전 페이지(previous)와 다음 페이지(next) End-Point를 포함하여 반환.
-        """
-
-        response = self.client.get(
-            path= f'{BASE_API_URL}/posts?page=3'
-        )
-
-        now_start_post_pk = 50 - (self.page_size * 2) # post ordering => 역순
-        posts_list = response.data['results']
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(posts_list), self.page_size)
-        self.assertEqual(posts_list[0]['id'], now_start_post_pk)
-        self.assertIn('?page=2', response.data['previous'])
-        self.assertIn('?page=4', response.data['next'])
-
-    def test_nonexistent_post_pagination(self):
-        """
-        case: 존재하지 않는 페이지를 쿼리문에 포함하여 요청을 보낼 경우
+        case: 유효하지 않은 커서로 게시글들의 정보 요청할 경우
 
         1. 404 Not Found 응답.
-        2. detail 필드에 오류 메시지를 포함하여 반환.
+        2. detail 필드에 오류 메시지를 포함하여 반환
         """
 
         response = self.client.get(
-            path= f'{BASE_API_URL}/posts?page=99999'
+            path= f'{BASE_API_URL}/posts?cursor=123A2B3d'
         )
+
+        response_error_code = response.data['detail'].code
+
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertEqual(response.data['detail'], "페이지가 유효하지 않습니다.")
+        self.assertEqual(response_error_code, 'not_found')
 
 
 # posts retrieve test case (READ)
@@ -242,7 +208,7 @@ class PostRetrieveTestCase(APITestCase):
         for i in range(5):
             CommentModel.objects.create(
                 owner= cls.user,
-                board= cls.user_post,
+                post= cls.user_post,
                 contents= "comments"
             )
 
@@ -251,24 +217,20 @@ class PostRetrieveTestCase(APITestCase):
         case: 특정 게시글의 pk를 포함해 세부 정보를 요청할 경우
 
         1. 200 Ok 응답.
-        2. 게시글에 대한 정보를 board 에 포함.
-        3. owner 필드는 작성자의 username으로 반환.
-        4. 해당 게시글에 달린 댓글 정보는 comment에 포함.
-        5. 해당 게시글에 달린 댓글 수는 board의 comment_num 에 포함.
+        2. owner 필드는 작성자의 username으로 반환.
+        3. 해당 게시글에 달린 댓글들은 comments 필드에 포함.
         """
 
         response = self.client.get(
             path= f'{BASE_API_URL}/posts/{self.user_post.pk}'
         )
 
-        board_response = response.data['board']
-        comment_response = response.data['comment']
+        comments_response_len = len(response.data['comments'])
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('board', response.data)
-        self.assertEqual(board_response['owner'], self.user.username)
-        self.assertIn('comment', response.data)
-        self.assertEqual(board_response['comment_num'], len(comment_response))
+        self.assertEqual(response.data['owner'], self.user.username)
+        self.assertIn('comments', response.data)
+        self.assertEqual(comments_response_len, 5)
 
     def test_retrieve_nonexistent_post(self):
         """
@@ -375,7 +337,6 @@ class PostModifyTestCase(APITestCase, JWTSetupMixin):
             format= 'json'
         )
         
-        # response 의 ErrorDetail code
         response_error_code = response.data['detail'].code
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
@@ -414,7 +375,6 @@ class PostModifyTestCase(APITestCase, JWTSetupMixin):
             format= 'json'
         )
         
-        # response 의 ErrorDetail code
         response_error_code = response.data['detail'].code
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -517,7 +477,6 @@ class PostDeleteTestCase(APITestCase, JWTSetupMixin):
             path= f'{BASE_API_URL}/posts/{dummy_users_post.pk}'
         )
         
-        # response 의 ErrorDetail code
         response_error_code = response.data['detail'].code
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -535,7 +494,6 @@ class PostDeleteTestCase(APITestCase, JWTSetupMixin):
             path= f'{BASE_API_URL}/posts/{self.user_post.pk}'
         )
         
-        # response 의 ErrorDetail code
         response_error_code = response.data['detail'].code
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)

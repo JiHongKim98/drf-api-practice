@@ -4,11 +4,10 @@ from rest_framework.test import APITestCase
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
 from http.cookies import SimpleCookie
-from accounts.models import User
-
-# client에 access, refresh 토큰 설정이 중복되어 Mixin 클래스로 모듈화함
-from accounts.test.common import JWTSetupMixin
 from unittest.mock import patch, ANY
+
+from accounts.models import User
+from tests.utils import JWTSetupMixin
 
 
 BASE_API_URL = '/api/v1/accounts'
@@ -119,7 +118,6 @@ class UserRegistrationTestCase(APITestCase):
             data= self.new_user
         )
 
-        # response 의 ErrorDetail code
         response_error_code = response.data['username'][0].code
         
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -133,8 +131,7 @@ class UserRegistrationTestCase(APITestCase):
         2. response 데이터에 해당 필드 오류 메시지 포함.
         """
 
-        # 필수 fields 정의
-        required_fields = ['username', 'password', 'email', 'fullname']
+        required_fields = ['username', 'password', 'email', 'fullname'] # 필수 fields
 
         for pop_field in required_fields:
             new_data = self.new_user.copy()
@@ -145,7 +142,6 @@ class UserRegistrationTestCase(APITestCase):
                 data= new_data
             )
 
-            # response 의 ErrorDetail code
             response_error_code = response.data[pop_field][0].code
 
             self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -199,7 +195,7 @@ class UserDetailTestCase(APITestCase, JWTSetupMixin):
         1. 401 Unauthorized 응답.
         2. detail 필드에 오류 메시지를 포함하여 반환.
         """
-        # cookie 정보 초기화 (token 초기화)
+        # cookie의 token 정보 초기화
         cookie = SimpleCookie()
         self.client.cookies = cookie
 
@@ -207,7 +203,6 @@ class UserDetailTestCase(APITestCase, JWTSetupMixin):
             path= f'{BASE_API_URL}/users'
         )
 
-        # response 의 ErrorDetail code
         response_error_code = response.data['detail'].code
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
@@ -284,20 +279,19 @@ class UserModifyTestCase(APITestCase, JWTSetupMixin):
            - delete refresh, access token in cookies
         """
 
-        # 업데이트 fields 정의
         update_fields = ['username', 'password', 'email', 'fullname']
 
         self.update_user_info.pop('password')
 
         for update_field in update_fields:
-            # 매 업데이트 마다 토큰이 사라지므로 새 토큰 갱신
+            # 업데이트 이후 재로그인
             refresh_token, _ = self.api_authentication(self.client, self.user)
 
             response = self.client.patch(
                 path= f'{BASE_API_URL}/users',
                 data= {
                     update_field: self.update_user[update_field]
-                    }
+                }
             )
 
             refresh_instance = OutstandingToken.objects.get(token= refresh_token)
@@ -320,7 +314,6 @@ class UserModifyTestCase(APITestCase, JWTSetupMixin):
             data= self.update_user
         )
         
-        # response 의 ErrorDetail code
         response_error_code = response.data['detail'].code
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
@@ -341,7 +334,6 @@ class UserModifyTestCase(APITestCase, JWTSetupMixin):
             fullname= "dummy"
         )
 
-        # 이미 사용중인 username 으로 변경
         self.update_user['username'] = dummy_user.username
 
         # client 에 refresh, access 토큰 설정 (JWTSetupMixin)
@@ -352,11 +344,31 @@ class UserModifyTestCase(APITestCase, JWTSetupMixin):
             data= self.update_user
         )
         
-        # response 의 ErrorDetail code
         response_error_code = response.data['username'][0].code
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response_error_code, 'unique')
+
+    def test_modify_password_field(self):
+        """
+        case: password 필드를 변경하는 경우
+
+        1. 200 OK 응답.
+        2. 비밀번호는 hashing 해서 저장해야함.
+        """
+        
+        # client 에 refresh, access 토큰 설정 (JWTSetupMixin)
+        self.api_authentication(self.client, self.user)
+
+        response = self.client.put(
+            path= f'{BASE_API_URL}/users',
+            data= self.update_user
+        )
+
+        user_instance = User.objects.get(id= 1)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotEqual(user_instance.password, self.update_user['password'])
 
 
 
@@ -410,7 +422,6 @@ class UserDeleteTestCase(APITestCase, JWTSetupMixin):
             path= f'{BASE_API_URL}/users'
         )
 
-        # response 의 ErrorDetail code
         response_error_code = response.data['detail'].code
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)

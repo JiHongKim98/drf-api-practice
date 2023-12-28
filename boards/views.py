@@ -1,67 +1,46 @@
-from rest_framework import generics
-from rest_framework.response import Response
-
-from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.generics import (
+    ListCreateAPIView,
+    RetrieveUpdateDestroyAPIView,
+    CreateAPIView
+)
 
 from boards.models import PostModel, CommentModel
-from .serializers import PostModelSerializer, CommentModelSerializer
-from .permissions import IsOwnerOrReadOnly
+from boards.serializers import (
+    PostListSerializer,
+    PostDetailSerializer,
+    CommentSerializer
+)
+from boards.permissions import IsOwnerOrReadOnly
+from boards.paginations import PostCurosrPagination
 
 
-# GET(List), POST
-class PostListCreateAPIView(generics.ListCreateAPIView):
+class PostListCreateAPIView(ListCreateAPIView):
     queryset = PostModel.objects.all()
-    serializer_class = PostModelSerializer
+    serializer_class = PostListSerializer
     permission_classes = [IsOwnerOrReadOnly]
-    authentication_classes = [JWTAuthentication]
-    
-    def create(self, request, *args, **kwargs):
-        request.data['owner'] = request.user.pk
-        return super().create(request, *args, **kwargs)
+    pagination_class = PostCurosrPagination
+
+    def perform_create(self, serializer):
+        serializer.save(owner= self.request.user)
 
 
-# GET(Retrieve), UPDATE, DELETE
-class PostDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+class PostDetailAPIView(RetrieveUpdateDestroyAPIView):
     queryset = PostModel.objects.all()
-    serializer_class = PostModelSerializer
+    serializer_class = PostDetailSerializer
     permission_classes = [IsOwnerOrReadOnly]
-    authentication_classes = [JWTAuthentication]
-
-    def update(self, request, *args, **kwargs):
-        request.data['owner'] = request.user.pk
-        return super().update(request, *args, **kwargs)
-    
-    def retrieve(self, request, *args, **kwargs):
-        instance = self.get_object()
-        serializer = PostModelSerializer(instance)
-        comment_instance = instance.post_comment.all() # related_name 으로 역참조
-        comment_serializer = CommentModelSerializer(comment_instance, many= True)
-        data = {
-            "board": serializer.data,
-            "comment": comment_serializer.data
-        }
-
-        return Response(data)
 
 
-class CommentCreateAPIView(generics.CreateAPIView):
+class CommentCreateAPIView(CreateAPIView):
     queryset = CommentModel.objects.all()
-    serializer_class = CommentModelSerializer
+    serializer_class = CommentSerializer
     permission_classes = [IsOwnerOrReadOnly]
-    authentication_classes = [JWTAuthentication]
 
-    def create(self, request, *args, **kwargs):
-        request.data['owner'] = request.user.pk
-        return super().create(request, *args, **kwargs)
+    def perform_create(self, serializer):
+        serializer.save(owner= self.request.user)
 
-    
-class CommentDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+
+class CommentDetailAPIView(RetrieveUpdateDestroyAPIView):
     queryset = CommentModel.objects.all()
-    serializer_class = CommentModelSerializer
+    serializer_class = CommentSerializer
     permission_classes = [IsOwnerOrReadOnly]
-    authentication_classes = [JWTAuthentication]
-
-    def update(self, request, *args, **kwargs):
-        request.data['owner'] = request.user.pk
-        return super().update(request, *args, **kwargs)
 
