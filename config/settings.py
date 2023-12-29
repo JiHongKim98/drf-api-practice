@@ -29,6 +29,8 @@ INSTALLED_APPS = [
     'django_celery_beat',
     'django_celery_results',
 
+    'drf_spectacular',
+
     'accounts',
     'boards',
 ]
@@ -151,4 +153,22 @@ EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
 EMAIL_USE_TLS = True
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
+
+# spectacular
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'DRF-specatular API Document',
+    'DESCRIPTION': 'DRF-specatular를 사용하여 만든 API 문서입니다.',
+    'CONTACT': {'name': '김지홍', 'email': 'kinjihong9598@gmail.com'},
+    'SWAGGER_UI_SETTINGS': {
+        'dom_id': '#swagger-ui',
+        'layout': 'BaseLayout',
+        'deepLinking': True,
+        'persistAuthorization': True,
+        'displayOperationId': True,
+        'filter': True,
+    },
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SWAGGER_UI_DIST': '//unpkg.com/swagger-ui-dist@3.38.0',
+}
 
