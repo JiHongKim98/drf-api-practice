@@ -1,67 +1,69 @@
-from rest_framework import generics
-from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework.generics import (
+    CreateAPIView,
+    ListCreateAPIView,
+    RetrieveUpdateDestroyAPIView,
+)
 
-from rest_framework_simplejwt.authentication import JWTAuthentication
+from boards.models import CommentModel, PostModel
+from boards.paginations import PostCursorPagination
+from boards.permissions import IsOwnerOrReadOnly
+from boards.serializers import (
+    CommentSerializer,
+    PostDetailSerializer,
+    PostListSerializer,
+)
 
-from boards.models import PostModel, CommentModel
-from .serializers import PostModelSerializer, CommentModelSerializer
-from .permissions import IsOwnerOrReadOnly
 
+@extend_schema(tags=["post"])
+@extend_schema_view(get=extend_schema(auth=[]))
+class PostListCreateAPIView(ListCreateAPIView):
+    """
+    게시물을 생성하고 조회하는 API
+    """
 
-# GET(List), POST
-class PostListCreateAPIView(generics.ListCreateAPIView):
     queryset = PostModel.objects.all()
-    serializer_class = PostModelSerializer
+    serializer_class = PostListSerializer
     permission_classes = [IsOwnerOrReadOnly]
-    authentication_classes = [JWTAuthentication]
-    
-    def create(self, request, *args, **kwargs):
-        request.data['owner'] = request.user.pk
-        return super().create(request, *args, **kwargs)
+    pagination_class = PostCursorPagination
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
 
 
-# GET(Retrieve), UPDATE, DELETE
-class PostDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+@extend_schema(tags=["post"])
+@extend_schema_view(get=extend_schema(auth=[]))
+class PostDetailAPIView(RetrieveUpdateDestroyAPIView):
+    """
+    특정 게시글을 조회, 수정, 삭제하는 API
+    """
+
     queryset = PostModel.objects.all()
-    serializer_class = PostModelSerializer
+    serializer_class = PostDetailSerializer
     permission_classes = [IsOwnerOrReadOnly]
-    authentication_classes = [JWTAuthentication]
-
-    def update(self, request, *args, **kwargs):
-        request.data['owner'] = request.user.pk
-        return super().update(request, *args, **kwargs)
-    
-    def retrieve(self, request, *args, **kwargs):
-        instance = self.get_object()
-        serializer = PostModelSerializer(instance)
-        comment_instance = instance.post_comment.all() # related_name 으로 역참조
-        comment_serializer = CommentModelSerializer(comment_instance, many= True)
-        data = {
-            "board": serializer.data,
-            "comment": comment_serializer.data
-        }
-
-        return Response(data)
 
 
-class CommentCreateAPIView(generics.CreateAPIView):
+@extend_schema(tags=["comment"])
+class CommentCreateAPIView(CreateAPIView):
+    """
+    댓글을 생성하는 API
+    """
+
     queryset = CommentModel.objects.all()
-    serializer_class = CommentModelSerializer
+    serializer_class = CommentSerializer
     permission_classes = [IsOwnerOrReadOnly]
-    authentication_classes = [JWTAuthentication]
 
-    def create(self, request, *args, **kwargs):
-        request.data['owner'] = request.user.pk
-        return super().create(request, *args, **kwargs)
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
 
-    
-class CommentDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+
+@extend_schema(tags=["comment"])
+@extend_schema_view(get=extend_schema(auth=[]))
+class CommentDetailAPIView(RetrieveUpdateDestroyAPIView):
+    """
+    댓글을 조회, 수정, 삭제하는 API
+    """
+
     queryset = CommentModel.objects.all()
-    serializer_class = CommentModelSerializer
+    serializer_class = CommentSerializer
     permission_classes = [IsOwnerOrReadOnly]
-    authentication_classes = [JWTAuthentication]
-
-    def update(self, request, *args, **kwargs):
-        request.data['owner'] = request.user.pk
-        return super().update(request, *args, **kwargs)
-

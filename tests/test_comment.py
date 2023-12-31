@@ -3,35 +3,31 @@ from rest_framework.test import APITestCase
 
 from accounts.models import User
 from boards.models import CommentModel, PostModel
+from tests.utils import JWTSetupMixin
 
-# client에 access, refresh 토큰 설정이 중복되어 Mixin 클래스로 모듈화함
-from boards.test.common import JWTSetupMixin
+BASE_API_URL = "/api/v1/boards"
 
-
-BASE_API_URL = '/api/v1/boards'
 
 # Comments create test case (CREATE)
 class CommentCreateTestCase(APITestCase, JWTSetupMixin):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user(
-            username= "kimjihong",
-            password= "password",
-            email= "kinjihong9598@gmail.com",
-            fullname= "kimjihong",
-            is_active= True
+            username="kimjihong",
+            password="password",
+            email="kinjihong9598@gmail.com",
+            fullname="kimjihong",
+            is_active=True,
         )
 
         cls.user_post = PostModel.objects.create(
-            title= "title",
-            contents= "contents",
-            owner= cls.user
+            title="title", contents="contents", owner=cls.user
         )
-    
+
     def test_create_comment_success(self):
         """
         case: 정상적으로 특정 게시글에 새로운 댓글이 생성될 경우
-        
+
         1. 201 Created 응답.
         2. owner 는 요청을 보낸 사용자로 자동 생성 (반환값은 pk가 아닌 username).
         3. created_date와 updated_date 정보 자동 생성.
@@ -41,18 +37,15 @@ class CommentCreateTestCase(APITestCase, JWTSetupMixin):
         self.api_authentication(self.client, self.user)
 
         response = self.client.post(
-            path= f'{BASE_API_URL}/comments',
-            data= {
-                "contents": "댓글 내용",
-                "board": self.user_post.pk
-            },
-            format= 'json'
+            path=f"{BASE_API_URL}/comments",
+            data={"contents": "댓글 내용", "post": self.user_post.pk},
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data['board'], self.user_post.pk)
-        self.assertEqual(response.data['owner'], self.user.username)
-        self.assertIn('created_date', response.data)
-        self.assertIn('updated_date', response.data)
+        self.assertEqual(response.data["post"], self.user_post.pk)
+        self.assertEqual(response.data["owner"], self.user.username)
+        self.assertIn("created_date", response.data)
+        self.assertIn("updated_date", response.data)
 
     def test_create_comment_with_changed_owner_field(self):
         """
@@ -63,26 +56,26 @@ class CommentCreateTestCase(APITestCase, JWTSetupMixin):
         """
 
         dummy_user = User.objects.create_user(
-            username= "dummy",
-            password= "dummy-pw",
-            email= "dummy@gmail.com",
-            fullname= "dummy"
+            username="dummy",
+            password="dummy-pw",
+            email="dummy@gmail.com",
+            fullname="dummy",
         )
 
         # client 에 refresh, access 토큰 설정 (JWTSetupMixin)
         self.api_authentication(self.client, self.user)
-            
+
         response = self.client.post(
-            path= f'{BASE_API_URL}/comments',
-            data= {
+            path=f"{BASE_API_URL}/comments",
+            data={
                 "contents": "게시글 내용",
-                "board": self.user_post.pk,
-                "owner": dummy_user.pk
+                "post": self.user_post.pk,
+                "owner": dummy_user.pk,
             },
-            format= 'json'
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data['owner'], self.user.username)
+        self.assertEqual(response.data["owner"], self.user.username)
 
     def test_create_comment_wrong_post_pk(self):
         """
@@ -96,19 +89,15 @@ class CommentCreateTestCase(APITestCase, JWTSetupMixin):
         self.api_authentication(self.client, self.user)
 
         response = self.client.post(
-            path= f'{BASE_API_URL}/comments',
-            data= {
-                "contents": "댓글 내용",
-                "board": 0
-            },
-            format= 'json'
+            path=f"{BASE_API_URL}/comments",
+            data={"contents": "댓글 내용", "post": 0},
+            format="json",
         )
 
-        # response 의 ErrorDetail code
-        response_error_code = response.data['board'][0].code
+        response_error_code = response.data["post"][0].code
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response_error_code, 'does_not_exist')
+        self.assertEqual(response_error_code, "does_not_exist")
 
     def test_create_comment_with_missing_required_fields(self):
         """
@@ -118,52 +107,42 @@ class CommentCreateTestCase(APITestCase, JWTSetupMixin):
         2. response 데이터에 해당 필드 오류 메시지 포함.
         """
 
-        required_fields = ['contents', 'board']
+        required_fields = ["contents", "post"]
 
         # client 에 refresh, access 토큰 설정 (JWTSetupMixin)
         self.api_authentication(self.client, self.user)
 
         for pop_field in required_fields:
-            data = {
-                "contents": "댓글 내용",
-                "board": self.user_post.pk
-            }
+            data = {"contents": "댓글 내용", "post": self.user_post.pk}
             data.pop(pop_field)
 
             response = self.client.post(
-                path= f'{BASE_API_URL}/comments',
-                data= data,
-                format= 'json'
+                path=f"{BASE_API_URL}/comments", data=data, format="json"
             )
 
-            # response 의 ErrorDetail code
             response_error_code = response.data[pop_field][0].code
 
             self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-            self.assertEqual(response_error_code, 'required')
+            self.assertEqual(response_error_code, "required")
 
     def test_create_comment_with_unauthorized(self):
         """
-        case: 인증되지 않은 사용자가 새 게시글을 생성하려는 경우
-        
+        case: 인증되지 않은 사용자가 새 댓글을 생성하려는 경우
+
         1. 401 Unauthorized 응답.
         2. detail 필드에 오류 메시지를 포함하여 반환.
         """
 
         response = self.client.post(
-            path= f'{BASE_API_URL}/comments',
-            data= {
-                "contents": "댓글 내용",
-                "board": 0
-            },
-            format= 'json'
+            path=f"{BASE_API_URL}/comments",
+            data={"contents": "댓글 내용", "post": self.user_post.pk},
+            format="json",
         )
 
-        # response 의 ErrorDetail code
-        response_error_code = response.data['detail'].code
-        
+        response_error_code = response.data["detail"].code
+
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-        self.assertEqual(response_error_code, 'not_authenticated')
+        self.assertEqual(response_error_code, "not_authenticated")
 
 
 # Comments retrieve test case (READ)
@@ -171,23 +150,19 @@ class CommentRetrieveTestCase(APITestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user(
-            username= "kimjihong",
-            password= "password",
-            email= "kinjihong9598@gmail.com",
-            fullname= "kimjihong",
-            is_active= True
+            username="kimjihong",
+            password="password",
+            email="kinjihong9598@gmail.com",
+            fullname="kimjihong",
+            is_active=True,
         )
 
         cls.user_post = PostModel.objects.create(
-            title= "post-title",
-            contents= "post-contents",
-            owner= cls.user
+            title="post-title", contents="post-contents", owner=cls.user
         )
 
         cls.user_comment = CommentModel.objects.create(
-            contents= "comment-contents",
-            owner= cls.user,
-            board= cls.user_post
+            contents="comment-contents", owner=cls.user, post=cls.user_post
         )
 
     def test_retrieve_comment_success(self):
@@ -196,15 +171,15 @@ class CommentRetrieveTestCase(APITestCase):
 
         1. 200 Ok 응답.
         2. owner 필드는 작성자의 username으로 반환.
-        3. board 필드는 post의 pk 번호로 반환.
+        3. post 필드는 게시글의 pk 번호로 반환.
         """
 
         response = self.client.get(
-            path= f'{BASE_API_URL}/comments/{self.user_comment.pk}'
+            path=f"{BASE_API_URL}/comments/{self.user_comment.pk}"
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['owner'], self.user.username)
-        self.assertEqual(response.data['board'], self.user_post.pk)
+        self.assertEqual(response.data["owner"], self.user.username)
+        self.assertEqual(response.data["post"], self.user_post.pk)
 
     def test_retrieve_nonexistent_post(self):
         """
@@ -214,11 +189,9 @@ class CommentRetrieveTestCase(APITestCase):
         2. detail 필드에 오류 메시지를 포함하여 반환.
         """
 
-        response = self.client.get(
-            path= f'{BASE_API_URL}/comments/99999'
-        )
+        response = self.client.get(path=f"{BASE_API_URL}/comments/99999")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertEqual(response.data['detail'], "찾을 수 없습니다.")
+        self.assertEqual(response.data["detail"], "찾을 수 없습니다.")
 
 
 # Comments update test case (UPDATE)
@@ -226,23 +199,19 @@ class CommentModifyTestCase(APITestCase, JWTSetupMixin):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user(
-            username= "kimjihong",
-            password= "password",
-            email= "kinjihong9598@gmail.com",
-            fullname= "kimjihong",
-            is_active= True
+            username="kimjihong",
+            password="password",
+            email="kinjihong9598@gmail.com",
+            fullname="kimjihong",
+            is_active=True,
         )
 
         cls.user_post = PostModel.objects.create(
-            title= "post-title",
-            contents= "post-contents",
-            owner= cls.user
+            title="post-title", contents="post-contents", owner=cls.user
         )
 
         cls.user_comment = CommentModel.objects.create(
-            contents= "comment-contents",
-            owner= cls.user,
-            board= cls.user_post
+            contents="comment-contents", owner=cls.user, post=cls.user_post
         )
 
     def test_modify_own_comment(self):
@@ -255,22 +224,19 @@ class CommentModifyTestCase(APITestCase, JWTSetupMixin):
         """
 
         before_updated_date = self.user_comment.updated_date
-        data = {
-            "contents": "modify-comment",
-            "board": self.user_post.pk
-        }
+        data = {"contents": "modify-comment", "post": self.user_post.pk}
 
         # client 에 refresh, access 토큰 설정 (JWTSetupMixin)
         self.api_authentication(self.client, self.user)
 
         response = self.client.put(
-            path= f'{BASE_API_URL}/comments/{self.user_post.pk}',
-            data= data,
-            format= 'json'
+            path=f"{BASE_API_URL}/comments/{self.user_post.pk}",
+            data=data,
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['contents'], data['contents'])
-        self.assertNotEqual(response.data['updated_date'], before_updated_date)
+        self.assertEqual(response.data["contents"], data["contents"])
+        self.assertNotEqual(response.data["updated_date"], before_updated_date)
 
     def test_partial_modify_own_comment(self):
         """
@@ -282,21 +248,19 @@ class CommentModifyTestCase(APITestCase, JWTSetupMixin):
         """
 
         before_updated_date = self.user_comment.updated_date
-        data = {
-            "contents": "modify-comment"
-        }
-        
+        data = {"contents": "modify-comment"}
+
         # client 에 refresh, access 토큰 설정 (JWTSetupMixin)
         self.api_authentication(self.client, self.user)
 
         response = self.client.patch(
-            path= f'{BASE_API_URL}/comments/{self.user_post.pk}',
-            data= data,
-            format= 'json'
+            path=f"{BASE_API_URL}/comments/{self.user_post.pk}",
+            data=data,
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['contents'], data['contents'])
-        self.assertNotEqual(response.data['updated_date'], before_updated_date)
+        self.assertEqual(response.data["contents"], data["contents"])
+        self.assertNotEqual(response.data["updated_date"], before_updated_date)
 
     def test_modfiy_comment_with_unauthorized(self):
         """
@@ -307,19 +271,15 @@ class CommentModifyTestCase(APITestCase, JWTSetupMixin):
         """
 
         response = self.client.put(
-            path= f'{BASE_API_URL}/comments/{self.user_comment.pk}',
-            data= {
-            "contents": "modify-comment",
-            "board": self.user_post.pk
-            },
-            format= 'json'
+            path=f"{BASE_API_URL}/comments/{self.user_comment.pk}",
+            data={"contents": "modify-comment", "post": self.user_post.pk},
+            format="json",
         )
-        
-        # response 의 ErrorDetail code
-        response_error_code = response.data['detail'].code
+
+        response_error_code = response.data["detail"].code
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-        self.assertEqual(response_error_code, 'not_authenticated')
+        self.assertEqual(response_error_code, "not_authenticated")
 
     def test_modify_other_users_comment(self):
         """
@@ -330,56 +290,48 @@ class CommentModifyTestCase(APITestCase, JWTSetupMixin):
         """
 
         dummy_user = User.objects.create_user(
-            username= "dummy",
-            password= "dummy-pw",
-            email= "dummy@gmail.com",
-            fullname= "dummy"
+            username="dummy",
+            password="dummy-pw",
+            email="dummy@gmail.com",
+            fullname="dummy",
         )
 
         dummy_users_comment = CommentModel.objects.create(
-            contents= "dummy-users-comment",
-            owner= dummy_user,
-            board= self.user_post
+            contents="dummy-users-comment", owner=dummy_user, post=self.user_post
         )
 
         # client 에 refresh, access 토큰 설정 (JWTSetupMixin)
         self.api_authentication(self.client, self.user)
 
         response = self.client.put(
-            path= f'{BASE_API_URL}/comments/{dummy_users_comment.pk}',
-            data= {
-            "contents": "modify-comment",
-            "board": self.user_post.pk
-            },
-            format= 'json'
+            path=f"{BASE_API_URL}/comments/{dummy_users_comment.pk}",
+            data={"contents": "modify-comment", "post": self.user_post.pk},
+            format="json",
         )
-        
-        # response 의 ErrorDetail code
-        response_error_code = response.data['detail'].code
+
+        response_error_code = response.data["detail"].code
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response_error_code, 'permission_denied')
+        self.assertEqual(response_error_code, "permission_denied")
 
     def test_modify_comment_foreign_key_info(self):
         """
-        case: 댓글의 FK 정보인 owner, board 필드를 수정하려는 경우
+        case: 댓글의 FK 정보인 owner, post 필드를 수정하려는 경우
 
         1. 200 Ok 응답.
-        2. owner, board 필드는 변경되지 않음.
+        2. owner, post 필드는 변경되지 않음.
         3. updated_date 갱신.
         """
 
         dummy_user = User.objects.create_user(
-            username= "dummy",
-            password= "dummy-pw",
-            email= "dummy@gmail.com",
-            fullname= "dummy"
+            username="dummy",
+            password="dummy-pw",
+            email="dummy@gmail.com",
+            fullname="dummy",
         )
 
         dummy_user_post = PostModel.objects.create(
-            title= "dummy-title",
-            contents= "dummy-contents",
-            owner= dummy_user
+            title="dummy-title", contents="dummy-contents", owner=dummy_user
         )
 
         before_updated_date = self.user_post.updated_date
@@ -388,17 +340,14 @@ class CommentModifyTestCase(APITestCase, JWTSetupMixin):
         self.api_authentication(self.client, self.user)
 
         response = self.client.patch(
-            path= f'{BASE_API_URL}/comments/{self.user_post.pk}',
-            data= {
-                "owner": dummy_user.pk,
-                "board": dummy_user_post.pk
-            },
-            format= 'json'
+            path=f"{BASE_API_URL}/comments/{self.user_post.pk}",
+            data={"owner": dummy_user.pk, "post": dummy_user_post.pk},
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertNotEqual(response.data['owner'], dummy_user.username)
-        self.assertNotEqual(response.data['board'], dummy_user_post.pk)
-        self.assertNotEqual(before_updated_date, response.data['updated_date'])
+        self.assertNotEqual(response.data["owner"], dummy_user.username)
+        self.assertNotEqual(response.data["post"], dummy_user_post.pk)
+        self.assertNotEqual(before_updated_date, response.data["updated_date"])
 
 
 # Comments delte test case (DELETE)
@@ -406,23 +355,19 @@ class CommentDeleteTestCase(APITestCase, JWTSetupMixin):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user(
-            username= "kimjihong",
-            password= "password",
-            email= "kinjihong9598@gmail.com",
-            fullname= "kimjihong",
-            is_active= True
+            username="kimjihong",
+            password="password",
+            email="kinjihong9598@gmail.com",
+            fullname="kimjihong",
+            is_active=True,
         )
 
         cls.user_post = PostModel.objects.create(
-            title= "post-title",
-            contents= "post-contents",
-            owner= cls.user
+            title="post-title", contents="post-contents", owner=cls.user
         )
 
         cls.user_comment = CommentModel.objects.create(
-            contents= "comment-contents",
-            owner= cls.user,
-            board= cls.user_post
+            contents="comment-contents", owner=cls.user, post=cls.user_post
         )
 
     def test_delete_own_comment(self):
@@ -437,10 +382,10 @@ class CommentDeleteTestCase(APITestCase, JWTSetupMixin):
         self.api_authentication(self.client, self.user)
 
         response = self.client.delete(
-            path= f'{BASE_API_URL}/comments/{self.user_comment.pk}'
+            path=f"{BASE_API_URL}/comments/{self.user_comment.pk}"
         )
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertFalse(CommentModel.objects.filter(pk= self.user_comment.pk).exists())
+        self.assertFalse(CommentModel.objects.filter(pk=self.user_comment.pk).exists())
 
     def test_delete_other_users_comment(self):
         """
@@ -451,30 +396,27 @@ class CommentDeleteTestCase(APITestCase, JWTSetupMixin):
         """
 
         dummy_user = User.objects.create_user(
-            username= "dummy",
-            password= "dummy-pw",
-            email= "dummy@gmail.com",
-            fullname= "dummy"
+            username="dummy",
+            password="dummy-pw",
+            email="dummy@gmail.com",
+            fullname="dummy",
         )
 
         dummy_users_comment = CommentModel.objects.create(
-            contents= "dummy-users-comment",
-            owner= dummy_user,
-            board= self.user_post
+            contents="dummy-users-comment", owner=dummy_user, post=self.user_post
         )
 
         # client 에 refresh, access 토큰 설정 (JWTSetupMixin)
         self.api_authentication(self.client, self.user)
 
         response = self.client.put(
-            path= f'{BASE_API_URL}/comments/{dummy_users_comment.pk}'
+            path=f"{BASE_API_URL}/comments/{dummy_users_comment.pk}"
         )
 
-        # response 의 ErrorDetail code
-        response_error_code = response.data['detail'].code
+        response_error_code = response.data["detail"].code
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response_error_code, 'permission_denied')
+        self.assertEqual(response_error_code, "permission_denied")
 
     def test_delete_comment_with_unauthorized(self):
         """
@@ -485,12 +427,10 @@ class CommentDeleteTestCase(APITestCase, JWTSetupMixin):
         """
 
         response = self.client.delete(
-            path= f'{BASE_API_URL}/comments/{self.user_comment.pk}'
+            path=f"{BASE_API_URL}/comments/{self.user_comment.pk}"
         )
 
-        # response 의 ErrorDetail code
-        response_error_code = response.data['detail'].code
+        response_error_code = response.data["detail"].code
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-        self.assertEqual(response_error_code, 'not_authenticated')
-
+        self.assertEqual(response_error_code, "not_authenticated")

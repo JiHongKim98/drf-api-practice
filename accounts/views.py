@@ -1,30 +1,31 @@
-from rest_framework import status, generics
-from rest_framework.views import APIView
-from rest_framework.request import Request
-from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework import status
+from rest_framework.generics import CreateAPIView, RetrieveUpdateDestroyAPIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import (
+    TokenBlacklistView,
+    TokenObtainPairView,
+    TokenRefreshView,
+)
 
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView, TokenBlacklistView
-from rest_framework_simplejwt.tokens import TokenError, RefreshToken
-from rest_framework_simplejwt.exceptions import InvalidToken
-from rest_framework_simplejwt.authentication import JWTAuthentication
-
-from django.http import Http404
-from django.utils.http import urlsafe_base64_decode
-from django.utils.encoding import force_str
-from django.shortcuts import get_object_or_404
-from django.contrib.auth.tokens import default_token_generator
-
-from accounts.models import User
-from accounts.serializers import UserSerializer
+from accounts import schemas
+from accounts.authentication import JWTCookieAuthentication
+from accounts.mixin import JWTCookieHandlerMixin
 from accounts.permissions import IsPostOrIsAuthenticated
+from accounts.serializers import EmailVerificationSerializer, UserSerializer
 
 
-# User 설정 관련 API
-class UserAPIView(generics.RetrieveUpdateDestroyAPIView,
-                  generics.CreateAPIView):
+@extend_schema(tags=["user"])
+@extend_schema_view(post=extend_schema(auth=[]))
+class UserAPIView(CreateAPIView, RetrieveUpdateDestroyAPIView):
+    """
+    request를 보낸 사용자 리소스에 대한 CRUD API
+    """
+
     permission_classes = [IsPostOrIsAuthenticated]
-    authentication_classes = [JWTAuthentication]
     serializer_class = UserSerializer
 
     def get_object(self):
@@ -33,95 +34,92 @@ class UserAPIView(generics.RetrieveUpdateDestroyAPIView,
     def delete(self, request, *args, **kwargs):
         response = super().delete(request, *args, **kwargs)
         return self.blacklisted_token(response)
-    
+
     def update(self, request, *args, **kwargs):
         response = super().update(request, *args, **kwargs)
         return self.blacklisted_token(response)
-    
-    def blacklisted_token(self, response):
-        # JWT 토큰 삭제 후 재로그인 유도
+
+    def blacklisted_token(self, response: Response) -> Response:
+        # JWT 인증 토큰 초기화
+        refresh = self.request.COOKIES.get("refresh", None)
+        if refresh:
+            RefreshToken(refresh).blacklist()
+
         response.delete_cookie("refresh")
         response.delete_cookie("access")
-        try:
-            refresh_token = self.request.COOKIES["refresh"]
-            RefreshToken(refresh_token).blacklist()
-        except Exception as e:
-            pass
+
         return response
 
 
-# Email 인증을 위한 End-Point
+class LoginAPIView(JWTCookieHandlerMixin, TokenObtainPairView):
+    """
+    사용자 인증을 위한 HttpOnly 속성의 access, refresh 토큰 발급 API
+    """
+
+    @extend_schema(
+        responses={200: schemas.SuccessResponseSerializer},
+        tags=["auth"],
+    )
+    def post(self, request, *args, **kwargs):
+        serializer = self.perform_serializer(data=request.data)
+        return self.set_cookie_response(**serializer.validated_data)
+
+
+class CustomTokenRefreshView(JWTCookieHandlerMixin, TokenRefreshView):
+    """
+    refresh 토큰을 통해 새로운 HttpOnly 속성의 access 토큰 발급 API
+    """
+
+    @extend_schema(
+        responses={200: schemas.SuccessResponseSerializer},
+        tags=["auth"],
+    )
+    def post(self, request, *args, **kwargs):
+        refresh = self.get_refresh_cookie(request)
+        serializer = self.perform_serializer(data={"refresh": refresh})
+        return self.set_cookie_response(**serializer.validated_data)
+
+
+class LogoutAPIView(JWTCookieHandlerMixin, TokenBlacklistView):
+    """
+    쿠키에 저장된 access, refresh 토큰을 삭제하고, refresh 토큰 blacklisted API
+    """
+
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTCookieAuthentication]
+
+    @extend_schema(
+        responses={200: schemas.SuccessResponseSerializer},
+        tags=["auth"],
+    )
+    def post(self, request, *args, **kwargs):
+        refresh = self.get_refresh_cookie(request)
+        self.perform_serializer(data={"refresh": refresh})
+        return self.delete_cookie_response()
+
+
 class EmailVerificationView(APIView):
+    """
+    회원가입시 작성한 Email로 전송된 인증 링크를 통해 사용자 계정을 활성시키는 API
+    """
+
+    authentication_classes = ()
+
+    @extend_schema(
+        responses={200: schemas.EmailVerifiationSuccessSerializer},
+        tags=["auth"],
+        auth=[],
+    )
     def get(self, request, uidb64, token):
-        try:
-            user = self.get_user(uidb64)
-            self.verify_token(user, token)
-            return Response({"detail": f"{user.username}님의 이메일 인증이 완료되었습니다."}, status=status.HTTP_200_OK)
+        serializer = EmailVerificationSerializer(
+            data={"uidb64": uidb64, "token": token}
+        )
+        serializer.is_valid(raise_exception=True)
 
-        except (ValueError, Http404):
-            return Response({"detail": "잘못된 URL 입니다."}, status=status.HTTP_400_BAD_REQUEST)
-
-    def get_user(self, uidb64):
-        uid = force_str(urlsafe_base64_decode(uidb64))
-        return get_object_or_404(User, pk=uid)
-
-    # Token 검증
-    def verify_token(self, user, token):
-        if not default_token_generator.check_token(user, token):
-            raise Http404()
+        user = serializer.validated_data["user"]
         user.is_active = True
         user.save()
 
-
-class LoginAPIView(TokenObtainPairView):
-    # TokenViewBase 의 response 는 refresh, access 토큰 정보를 반환하기 때문에
-    # "login success" 로 바꾸고 토큰은 쿠키에 담아서 응답.
-    def post(self, request: Request, *args, **kwargs) -> Response:
-        res = super().post(request, *args, **kwargs)
-        
-        response = Response({"detail": "login success"}, status= status.HTTP_200_OK)
-        response.set_cookie("refresh", res.data.get('refresh', None), httponly= True)
-        response.set_cookie("access", res.data.get('access', None), httponly= True)
-
-        return response
-
-    
-class CustomTokenRefreshView(TokenRefreshView):
-    def post(self, request: Request, *args, **kwargs) -> Response:
-        refresh_token = request.COOKIES.get('refresh', '토큰이 업서용')
-        data = {"refresh": refresh_token}
-        serializer = self.get_serializer(data= data)
-
-        try:
-            serializer.is_valid(raise_exception= True)
-        except TokenError as e:
-            raise InvalidToken(e.args[0])
-
-        token = serializer.validated_data
-        response = Response({"detail": "refresh success"}, status= status.HTTP_200_OK)
-        response.set_cookie("refresh", token['refresh'], httponly= True)
-        response.set_cookie("access", token['access'], httponly= True)
-
-        return response
-
-
-class LogoutAPIView(TokenBlacklistView):
-    permission_classes = [IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
-
-    def post(self, request: Request, *args, **kwargs) -> Response:
-        refresh_token = request.COOKIES.get('refresh', '토큰이 업서용')
-        data = {"refresh": str(refresh_token)}
-        serializer = self.get_serializer(data= data)
-
-        try:
-            serializer.is_valid(raise_exception= True)
-        except TokenError as e:
-            raise InvalidToken(e.args[0])
-
-        response = Response({"detail": "token blacklisted"}, status= status.HTTP_200_OK)
-        response.delete_cookie("refresh")
-        response.delete_cookie("access")
-
-        return response
-
+        return Response(
+            {"detail": f"{user.username}님의 이메일 인증이 완료되었습니다."}, status=status.HTTP_200_OK
+        )
