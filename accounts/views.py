@@ -1,27 +1,25 @@
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import status
-from rest_framework.views import APIView
 from rest_framework.generics import CreateAPIView, RetrieveUpdateDestroyAPIView
-from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import (
+    TokenBlacklistView,
     TokenObtainPairView,
     TokenRefreshView,
-    TokenBlacklistView
 )
-from rest_framework_simplejwt.tokens import RefreshToken
-
-from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from accounts import schemas
-from accounts.mixin import JWTCookieHandlerMixin
-from accounts.serializers import UserSerializer, EmailVerificationSerializer
-from accounts.permissions import IsPostOrIsAuthenticated
 from accounts.authentication import JWTCookieAuthentication
+from accounts.mixin import JWTCookieHandlerMixin
+from accounts.permissions import IsPostOrIsAuthenticated
+from accounts.serializers import EmailVerificationSerializer, UserSerializer
 
 
-@extend_schema(tags= ['user'])
-@extend_schema_view(post= extend_schema(auth= []))
+@extend_schema(tags=["user"])
+@extend_schema_view(post=extend_schema(auth=[]))
 class UserAPIView(CreateAPIView, RetrieveUpdateDestroyAPIView):
     """
     request를 보낸 사용자 리소스에 대한 CRUD API
@@ -36,14 +34,14 @@ class UserAPIView(CreateAPIView, RetrieveUpdateDestroyAPIView):
     def delete(self, request, *args, **kwargs):
         response = super().delete(request, *args, **kwargs)
         return self.blacklisted_token(response)
-    
+
     def update(self, request, *args, **kwargs):
         response = super().update(request, *args, **kwargs)
         return self.blacklisted_token(response)
-    
+
     def blacklisted_token(self, response: Response) -> Response:
         # JWT 인증 토큰 초기화
-        refresh = self.request.COOKIES.get('refresh', None)
+        refresh = self.request.COOKIES.get("refresh", None)
         if refresh:
             RefreshToken(refresh).blacklist()
 
@@ -59,13 +57,11 @@ class LoginAPIView(JWTCookieHandlerMixin, TokenObtainPairView):
     """
 
     @extend_schema(
-        responses={
-            200: schemas.SuccessResponseSerializer
-            },
-        tags= ['auth'],
+        responses={200: schemas.SuccessResponseSerializer},
+        tags=["auth"],
     )
     def post(self, request, *args, **kwargs):
-        serializer = self.perform_serializer(data= request.data)
+        serializer = self.perform_serializer(data=request.data)
         return self.set_cookie_response(**serializer.validated_data)
 
 
@@ -75,14 +71,12 @@ class CustomTokenRefreshView(JWTCookieHandlerMixin, TokenRefreshView):
     """
 
     @extend_schema(
-        responses={
-            200: schemas.SuccessResponseSerializer
-            },
-        tags= ['auth'],
+        responses={200: schemas.SuccessResponseSerializer},
+        tags=["auth"],
     )
     def post(self, request, *args, **kwargs):
         refresh = self.get_refresh_cookie(request)
-        serializer = self.perform_serializer(data= {'refresh': refresh})
+        serializer = self.perform_serializer(data={"refresh": refresh})
         return self.set_cookie_response(**serializer.validated_data)
 
 
@@ -95,14 +89,12 @@ class LogoutAPIView(JWTCookieHandlerMixin, TokenBlacklistView):
     authentication_classes = [JWTCookieAuthentication]
 
     @extend_schema(
-        responses={
-            200: schemas.SuccessResponseSerializer
-            },
-        tags= ['auth'],
+        responses={200: schemas.SuccessResponseSerializer},
+        tags=["auth"],
     )
     def post(self, request, *args, **kwargs):
         refresh = self.get_refresh_cookie(request)
-        self.perform_serializer(data= {'refresh': refresh})
+        self.perform_serializer(data={"refresh": refresh})
         return self.delete_cookie_response()
 
 
@@ -113,19 +105,21 @@ class EmailVerificationView(APIView):
 
     authentication_classes = ()
 
-    @extend_schema(responses= {
-        200: schemas.EmailVerifiationSuccessSerializer
-    },
-    tags= ['auth'],
-    auth= [],
+    @extend_schema(
+        responses={200: schemas.EmailVerifiationSuccessSerializer},
+        tags=["auth"],
+        auth=[],
     )
     def get(self, request, uidb64, token):
-        serializer = EmailVerificationSerializer(data= {'uidb64': uidb64, 'token': token})
-        serializer.is_valid(raise_exception= True)
-        
-        user = serializer.validated_data['user']
+        serializer = EmailVerificationSerializer(
+            data={"uidb64": uidb64, "token": token}
+        )
+        serializer.is_valid(raise_exception=True)
+
+        user = serializer.validated_data["user"]
         user.is_active = True
         user.save()
 
-        return Response({"detail": f"{user.username}님의 이메일 인증이 완료되었습니다."}, status= status.HTTP_200_OK)
-
+        return Response(
+            {"detail": f"{user.username}님의 이메일 인증이 완료되었습니다."}, status=status.HTTP_200_OK
+        )

@@ -7,4 +7,3 @@ class IsPostOrIsAuthenticated(BasePermission):
             return True
 
         return request.user and request.user.is_authenticated
-

@@ -1,12 +1,12 @@
 from django.urls import path
+
 from accounts.views import (
-    UserAPIView,
+    CustomTokenRefreshView,
+    EmailVerificationView,
     LoginAPIView,
     LogoutAPIView,
-    CustomTokenRefreshView,
-    EmailVerificationView
+    UserAPIView,
 )
-
 
 urlpatterns = [
     path("users", UserAPIView.as_view()),
@@ -15,4 +15,3 @@ urlpatterns = [
     path("refresh", CustomTokenRefreshView.as_view()),
     path("activate/<str:uidb64>/<str:token>", EmailVerificationView.as_view()),
 ]
-

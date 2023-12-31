@@ -1,10 +1,10 @@
-from rest_framework.pagination import CursorPagination
 from rest_framework.exceptions import NotFound
+from rest_framework.pagination import CursorPagination
 
 
-class PostCurosrPagination(CursorPagination):
+class PostCursorPagination(CursorPagination):
     page_size = 10
-    ordering = '-id'
+    ordering = "-id"
 
     def paginate_queryset(self, queryset, request, view=None):
         try:
@@ -12,4 +12,3 @@ class PostCurosrPagination(CursorPagination):
         except ValueError:
             # 커서(cursor)가 유효하지 않습니다.
             raise NotFound(self.invalid_cursor_message)
-

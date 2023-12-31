@@ -1,5 +1,5 @@
-from typing import Tuple
 from http.cookies import SimpleCookie
+from typing import Tuple
 
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -27,13 +27,12 @@ class JWTSetupMixin:
         """
 
         # refresh, access token 발급
-        refresh_token = RefreshToken.for_user(user= user)
+        refresh_token = RefreshToken.for_user(user=user)
         access_token = refresh_token.access_token
 
         cookie = SimpleCookie()
-        cookie['refresh'] = refresh_token
-        cookie['access'] = access_token
+        cookie["refresh"] = refresh_token
+        cookie["access"] = access_token
         client.cookies = cookie
 
         return refresh_token, access_token
-

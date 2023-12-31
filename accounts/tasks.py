@@ -1,12 +1,11 @@
-from rest_framework_simplejwt.token_blacklist.models import (
-    BlacklistedToken,
-    OutstandingToken
-)
-
 from celery import shared_task
+from django.core.mail import EmailMessage
 from django.db import transaction
 from django.utils import timezone
-from django.core.mail import EmailMessage
+from rest_framework_simplejwt.token_blacklist.models import (
+    BlacklistedToken,
+    OutstandingToken,
+)
 
 
 # 만료된 JWT를 작제하는 TASK
@@ -14,14 +13,14 @@ from django.core.mail import EmailMessage
 @transaction.atomic
 def clean_expiry_token():
     now_date = timezone.now()
-    expired_tokens = OutstandingToken.objects.filter(expires_at__lt= now_date)
+    expired_tokens = OutstandingToken.objects.filter(expires_at__lt=now_date)
 
     if expired_tokens != 0:
         for Outstand_instance in expired_tokens:
             token_id = Outstand_instance.id
 
             try:
-                blacklist_instance= BlacklistedToken.objects.get(id= token_id)
+                blacklist_instance = BlacklistedToken.objects.get(id=token_id)
                 blacklist_instance.delete()
             except BlacklistedToken.DoesNotExist:
                 pass
@@ -37,9 +36,6 @@ def send_verification_mail(username: str, email: str, verification_url: str):
     """
 
     email = EmailMessage(
-        subject= f"{username}님의 이메일 인증 링크입니다.",
-        body= message,
-        to= [email]
+        subject=f"{username}님의 이메일 인증 링크입니다.", body=message, to=[email]
     )
     email.send()
-
