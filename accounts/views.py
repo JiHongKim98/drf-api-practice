@@ -58,6 +58,7 @@ class LoginAPIView(JWTCookieHandlerMixin, TokenObtainPairView):
 
     @extend_schema(
         responses={200: schemas.SuccessResponseSerializer},
+        request=None,
         tags=["auth"],
     )
     def post(self, request, *args, **kwargs):
@@ -72,6 +73,7 @@ class CustomTokenRefreshView(JWTCookieHandlerMixin, TokenRefreshView):
 
     @extend_schema(
         responses={200: schemas.SuccessResponseSerializer},
+        request=None,
         tags=["auth"],
     )
     def post(self, request, *args, **kwargs):
@@ -90,6 +92,7 @@ class LogoutAPIView(JWTCookieHandlerMixin, TokenBlacklistView):
 
     @extend_schema(
         responses={200: schemas.SuccessResponseSerializer},
+        request=None,
         tags=["auth"],
     )
     def post(self, request, *args, **kwargs):
