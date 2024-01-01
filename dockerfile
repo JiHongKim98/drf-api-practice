@@ -15,3 +15,4 @@ RUN apk update && \
 
 COPY . .
 
+ENTRYPOINT ["/code/entrypoint.sh"]
